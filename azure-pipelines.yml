@@ -1,0 +1,61 @@
+schedules:
+  - cron: '30 16 * * *'
+    branches:
+      include:
+      - main
+
+variables:
+  MUNKI_DEVOPS_PROJECT: "Munki"
+  MUNKI_DEVOPS_REPO_NAME: "Munki"
+  AUTOPROMOTE_REPO_NAME: "Autopromote"
+  MUNKI_REPO: $(Build.SourcesDirectory)/$(MUNKI_DEVOPS_REPO_NAME)/AzureBlob
+  REPO_DIR: $(Build.SourcesDirectory)/$(AUTOPROMOTE_REPO_NAME)
+
+pool:
+  vmImage: macos-latest
+  timeout-minutes: 5
+
+steps:
+- checkout: self
+  persistCredentials: true
+  fetchDepth: 1
+  displayName: Checkout this repo
+
+- checkout: git://$(MUNKI_DEVOPS_PROJECT)/$(MUNKI_DEVOPS_REPO_NAME)
+  lfs: true
+  persistCredentials: true
+  fetchDepth: 1
+  displayName: Checkout Munki repo
+
+- script: |
+      curl -L https://github.com/munki/munki/releases/download/v5.5.1/munkitools-5.5.1.4365.pkg --output /tmp/munkitools.pkg
+      sudo installer -pkg /tmp/munkitools.pkg -target /
+  displayName: Install Munki tools
+
+- script: |
+    sudo cp $(REPO_DIR)/autopromote.json /usr/local/munki/autopromote.json
+    sudo install -m 644 /dev/null /var/log/autopromote.log
+    mkdir munki_repo
+    sudo ln -s $(MUNKI_REPO) munki_repo/
+  displayName: Configure autopromote
+
+- script: |
+    pip3 install -r $(REPO_DIR)/requirements.txt
+    pip3 install packaging
+  displayName: Install python dependencies
+
+- script: |
+    python3 $(REPO_DIR)/autopromote.py
+  displayName: Run autopromote script
+  env:
+    TEAMS_WEBHOOK: $(TEAMS_WEBHOOK)
+
+- script: |
+    cd munki_repo/AzureBlob
+    git config --global user.name "autopromote_pipeline"
+    git config --global user.email "autopromote_pipeline@azuredevops.com"
+    git checkout -b "autopromote-`date +'%Y-%m-%d'`"
+    git add pkgsinfo/
+    git add catalogs/
+    if [ -n "$(git status --porcelain)" ]; then git commit -m "`date +'%Y-%m-%d'` autopromote" && git push --set-upstream origin "autopromote-`date +'%Y-%m-%d'`"; else echo "Nothing to commit"; fi
+  displayName: Commit changes
