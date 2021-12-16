@@ -13,7 +13,6 @@ variables:
 
 pool:
   vmImage: macos-latest
-  timeout-minutes: 5
 
 steps:
 - checkout: self
@@ -47,6 +46,7 @@ steps:
 - script: |
     python3 $(REPO_DIR)/autopromote.py
   displayName: Run autopromote script
+  timeoutInMinutes: 5
   env:
     TEAMS_WEBHOOK: $(TEAMS_WEBHOOK)
 
