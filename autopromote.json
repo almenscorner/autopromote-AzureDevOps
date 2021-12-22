@@ -15,7 +15,7 @@
 		},
 		"prerelease": {
 			"days": 4,
-			"next": "release",
+			"next": "Production",
 			"force_install_days": 3
 		},
 		"Production": {
